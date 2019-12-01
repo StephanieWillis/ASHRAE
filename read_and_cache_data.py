@@ -1,6 +1,7 @@
 import pathlib
 import pandas as pd
 import ashrae_constants as const
+import itertools
 
 
 def import_data(ashrae_dir, filenames=const.NAMES):
@@ -47,4 +48,43 @@ def get_data(ashrae_dir, cache_file=None, filenames=const.NAMES):
     assert set(data['train'].building_id) == set(data['test'].building_id)
 
     return data
+
+
+def clean_data(raw_data, names=const.NAMES, meter_map=const.METER_MAP):
+    """
+    Convert timestamps to timestamp objects, fill in blanks in weather data, add names of meter types
+    """
+
+    cleaned_data = raw_data.copy()
+    if 'building_metadata' in names:
+        names.remove('building_metadata')
+
+    for name in names:
+        print(f'Cleaning {name} dataset')
+        df = cleaned_data[name]
+        df.timestamp = pd.to_datetime(df.timestamp)
+        if name == 'weather_*':
+            df = add_missing_weather_data(df)
+
+        elif name in ['train', 'test']:
+            df['meter_type'] = df['meter'].map(meter_map)
+            pass
+
+    return cleaned_data
+
+
+def add_missing_weather_data(df):
+    """ Add missing timestamps to weather data and interpolate to fill in the data
+    return df with missing times and weather data filled in
+    """
+
+    full_date_range = pd.date_range(start=min(df.timestamp), end=max(df.timestamp), freq='H')
+    sites = list(set(df.site_id))
+    full_data_site_range = pd.DataFrame(itertools.product(sites, full_date_range),
+                                        columns=['site_id', 'timestamp'])
+    df_all_dates = full_data_site_range.merge(df, on = ['site_id', 'timestamp'], how='left')
+    df_all_dates = df_all_dates.groupby('site_id').apply(lambda group: group.interpolate(limit_direction='both'))
+
+    return df_all_dates
+
 

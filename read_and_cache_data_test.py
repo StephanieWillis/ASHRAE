@@ -3,9 +3,12 @@ from IPython.display import display
 import ashrae_constants as const
 
 #raw data
-data_raw = rcd.get_data('ashrae-energy-prediction', cache_file='store_raw.h5')
+raw_data= rcd.get_data('ashrae-energy-prediction', cache_file='store_raw.h5')
 for name in const.NAMES:
     print(f'NaNs for {name}')
-    display(data_raw[name].isna().sum())
+    display(raw_data[name].isna().sum())
+
+# clean data
+cleaned_data = rcd.clean_data(raw_data)
 
 
