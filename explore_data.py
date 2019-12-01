@@ -1,11 +1,15 @@
 import pandas as pd
 
 
-def get_buildings_with_high_meter(df, threshold):
+def get_buildings_with_high_meter(df, thresholds):
     """
-   Return the set of building ids with a count of meter readings above a certain threshold.
+   Return a dict of {threshold: set of buildings with a meter reading above that threshold}
    """
-    return set(df.building_id[df.meter_reading > threshold])
+    high_meter_buildings = {threshold: set(df.building_id[df.meter_reading > threshold]) for threshold in thresholds}
+    for threshold, buildings in high_meter_buildings .items():
+        print(f'There are {len(buildings)} buildings with meter readings above {threshold // 1_000_000}M: {buildings}')
+
+    return high_meter_buildings
 
 
 def count_missing_timestamps(df):
