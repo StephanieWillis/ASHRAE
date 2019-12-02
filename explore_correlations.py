@@ -39,4 +39,28 @@ def plot_correlations(buildings_correlations):
     plot_correlation_distribution(buildings_correlations)
     plot_correlation_distribution(buildings_correlations[['air_temperature', 'dew_temperature']])
 
-#add stuff integrating over week
+
+def produce_weekly_average_data(df, weekly_attributes=const.WEEKLY_ATTRIBUTES):
+    df_weekly_means = df[weekly_attributes].groupby(['building_id', 'week_number']).mean()
+
+    #add building id back in as a column for later operations
+    df_weekly_means['building_id'] = list(df_weekly_means.index.get_level_values('building_id'))
+    return df_weekly_means
+
+
+def produce_weekly_degree_hours(df, set_point_temp):
+    df_temp = df[['meter_reading','air_temperature','week_number']].copy()
+    df_temp['delta_temp'] = df_temp['air_temperature'] - set_point_temp
+    df_temp = df_temp.drop(columns='air_temperature')
+    df_weekly_dh = df_temp.groupby(['building_id', 'week_number']).sum()
+    df_weekly_dh['building_id'] = list(df_weekly_dh.index.get_level_values('building_id'))
+    return df_weekly_dh
+
+
+def loop_through_meters_apply_correlation_operation(correlation_function, all_meters_dict, correlators):
+    dict_of_returns = {}
+    for meter_type, all_df in all_meters_dict.items():
+        print("Meter type: ", meter_type)
+        dict_of_returns[meter_type] = correlation_function(all_df, correlators=correlators)
+        plot_correlations(dict_of_returns[meter_type])
+    return dict_of_returns
