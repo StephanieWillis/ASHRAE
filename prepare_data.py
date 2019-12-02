@@ -28,7 +28,7 @@ def _cache_data(data, filename):
             f[name] = df
 
 
-def get_data(ashrae_dir, cache_file=None, filenames=const.NAMES):
+def get_raw_data(ashrae_dir, cache_file=None, filenames=const.NAMES):
     """
    Import ASHRAE data with optional caching mechanism.
 
@@ -83,6 +83,21 @@ def count_missing_timestamps(df):
     return no_of_missing_timestamps
 
 
+def add_missing_weather_data(df):
+    """ Add missing timestamps to weather data and interpolate to fill in the data
+    return df with missing times and weather data filled in
+    """
+
+    full_date_range = pd.date_range(start=min(df.timestamp), end=max(df.timestamp), freq='H')
+    sites = list(set(df.site_id))
+    full_data_site_range = pd.DataFrame(itertools.product(sites, full_date_range),
+                                        columns=['site_id', 'timestamp'])
+    df_all_dates = full_data_site_range.merge(df, on = ['site_id', 'timestamp'], how='left')
+    df_all_dates = df_all_dates.groupby('site_id').apply(lambda group: group.interpolate(limit_direction='both'))
+
+    return df_all_dates
+
+
 def clean_data(raw_data, names=const.NAMES, meter_map=const.METER_MAP):
     """
     Convert timestamps to timestamp objects, fill in blanks in weather data, add names of meter types
@@ -108,17 +123,85 @@ def clean_data(raw_data, names=const.NAMES, meter_map=const.METER_MAP):
     return cleaned_data
 
 
-def add_missing_weather_data(df):
-    """ Add missing timestamps to weather data and interpolate to fill in the data
-    return df with missing times and weather data filled in
+def join_input_data_and_multi_index(data, dataset_name):
+    """Join together the meter data, weather data and building metadata into one df
+
+    data = dict of df's (keys are'building_metadata', 'weather_train', 'weather_test', 'train','test')
+    dataset_name = 'train' or 'test'
+                    """
+
+    meter_df = data[dataset_name]
+    building_df = data['building_metadata']
+    weather_df = data['weather_' + dataset_name]
+
+    # join meter and weather data
+    building_n_meter = meter_df.merge(building_df, on='building_id', how='left')
+    joined_data = building_n_meter.merge(weather_df, on=['site_id', 'timestamp'], how='left')
+
+    # Add time related columns
+    joined_data['hour'] = joined_data['timestamp'].dt.hour
+    joined_data['weekday'] = joined_data['timestamp'].dt.dayofweek
+    joined_data['week_number'] = joined_data['timestamp'].dt.week
+    joined_data['month'] = joined_data['timestamp'].dt.month
+
+    joined_data['is_weekend'] = joined_data['weekday'].apply(lambda x: 1 if x in [0, 6] else 0)
+
+    # multi index on building id and timestamp
+    joined_data = joined_data.set_index(['building_id', 'timestamp']).sort_index()
+
+    return joined_data
+
+
+def split_on_meter_type(joined_data, meter_types):
+    """ Split the joined data into a dict with a df for each meter type"""
+    joined_data_dict = {meter_type: joined_data[joined_data['meter_type'] == meter_type] 
+                        for meter_type in meter_types}
+
+    return joined_data_dict
+
+
+def import_dict_from_cached(cache_file, key_list):
+    print(f'Importing data from {cache_file}')
+    with pd.HDFStore(cache_file) as f:
+        data_dict = {key: f[key] for key in key_list}
+    return data_dict
+
+
+def get_joined_data(joined_cache_filename_end='_store_joined.h5',
+                    meter_types=const.METER_MAP.values(),
+                    ashrae_dir='ashrae-energy-prediction',
+                    raw_cache_file='store_raw.h5',
+                    filenames=const.NAMES):
     """
+    Return a dict of {meter_type: df} dictionary for either the train (default) or test datasets
 
-    full_date_range = pd.date_range(start=min(df.timestamp), end=max(df.timestamp), freq='H')
-    sites = list(set(df.site_id))
-    full_data_site_range = pd.DataFrame(itertools.product(sites, full_date_range),
-                                        columns=['site_id', 'timestamp'])
-    df_all_dates = full_data_site_range.merge(df, on = ['site_id', 'timestamp'], how='left')
-    df_all_dates = df_all_dates.groupby('site_id').apply(lambda group: group.interpolate(limit_direction='both'))
+   """
 
-    return df_all_dates
+    dataset_names = ['train', 'test']
+    joined_cache_filenames = {dataset: pathlib.Path(dataset + joined_cache_filename_end) for dataset in dataset_names }
+    joined_data_dict = {}
+
+    if (joined_cache_filename_end is not None
+            and joined_cache_filenames['train'].exists()
+            and joined_cache_filenames['test'].exists()):
+        for dataset in dataset_names:
+            joined_data_dict[dataset] = import_dict_from_cached(joined_cache_filenames[dataset], meter_types)
+    else:
+        print('Reading, cleaning and joining data')
+        raw_data = get_raw_data(ashrae_dir, cache_file=raw_cache_file, filenames=filenames)
+        print('cleaning data')
+        cleaned_data = clean_data(raw_data)
+        for dataset in dataset_names:
+            print('joining datasets - ' + dataset)
+            joined_data = join_input_data_and_multi_index(cleaned_data, dataset)
+            print('splitting on meter type - ' + dataset)
+            joined_data_dict[dataset] = split_on_meter_type(joined_data, meter_types)
+            print('caching resultant dataset - ' + dataset)
+            _cache_data(joined_data_dict[dataset], joined_cache_filenames[dataset])
+
+    train_joined_data_dict = joined_data_dict['train']
+    test_joined_data_dict = joined_data_dict['test']
+
+    return train_joined_data_dict, test_joined_data_dict
+
 
