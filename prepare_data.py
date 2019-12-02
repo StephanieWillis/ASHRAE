@@ -62,7 +62,7 @@ def get_buildings_with_high_meter(df, thresholds):
    Return a dict of {threshold: set of buildings with a meter reading above that threshold}
    """
     high_meter_buildings = {threshold: set(df.building_id[df.meter_reading > threshold]) for threshold in thresholds}
-    for threshold, buildings in high_meter_buildings .items():
+    for threshold, buildings in high_meter_buildings.items():
         print(f'There are {len(buildings)} buildings with meter readings above {threshold // 1_000_000}M: {buildings}')
 
     return high_meter_buildings
@@ -92,7 +92,7 @@ def add_missing_weather_data(df):
     sites = list(set(df.site_id))
     full_data_site_range = pd.DataFrame(itertools.product(sites, full_date_range),
                                         columns=['site_id', 'timestamp'])
-    df_all_dates = full_data_site_range.merge(df, on = ['site_id', 'timestamp'], how='left')
+    df_all_dates = full_data_site_range.merge(df, on=['site_id', 'timestamp'], how='left')
     df_all_dates = df_all_dates.groupby('site_id').apply(lambda group: group.interpolate(limit_direction='both'))
 
     return df_all_dates
@@ -154,7 +154,7 @@ def join_input_data_and_multi_index(data, dataset_name):
 
 def split_on_meter_type(joined_data, meter_types):
     """ Split the joined data into a dict with a df for each meter type"""
-    joined_data_dict = {meter_type: joined_data[joined_data['meter_type'] == meter_type] 
+    joined_data_dict = {meter_type: joined_data[joined_data['meter_type'] == meter_type]
                         for meter_type in meter_types}
 
     return joined_data_dict
@@ -167,7 +167,8 @@ def import_dict_from_cached(cache_file, key_list):
     return data_dict
 
 
-def get_joined_data(joined_cache_filename_end='_store_joined.h5',
+def get_joined_data(dataset_names=['train', 'test'],
+                    joined_cache_filename_end='_store_joined.h5',
                     meter_types=const.METER_MAP.values(),
                     ashrae_dir='ashrae-energy-prediction',
                     raw_cache_file='store_raw.h5',
@@ -177,13 +178,11 @@ def get_joined_data(joined_cache_filename_end='_store_joined.h5',
 
    """
 
-    dataset_names = ['train', 'test']
-    joined_cache_filenames = {dataset: pathlib.Path(dataset + joined_cache_filename_end) for dataset in dataset_names }
+    joined_cache_filenames = {dataset: pathlib.Path(dataset + joined_cache_filename_end) for dataset in dataset_names}
     joined_data_dict = {}
+    all_files_stored = [file.exists() for file in joined_cache_filenames.values()]
 
-    if (joined_cache_filename_end is not None
-            and joined_cache_filenames['train'].exists()
-            and joined_cache_filenames['test'].exists()):
+    if joined_cache_filename_end is not None and all(all_files_stored):
         for dataset in dataset_names:
             joined_data_dict[dataset] = import_dict_from_cached(joined_cache_filenames[dataset], meter_types)
     else:
@@ -199,9 +198,23 @@ def get_joined_data(joined_cache_filename_end='_store_joined.h5',
             print('caching resultant dataset - ' + dataset)
             _cache_data(joined_data_dict[dataset], joined_cache_filenames[dataset])
 
-    train_joined_data_dict = joined_data_dict['train']
-    test_joined_data_dict = joined_data_dict['test']
-
-    return train_joined_data_dict, test_joined_data_dict
+    return joined_data_dict
 
 
+def produce_and_cache_small_dataset_dict(dataset_name,
+                                         n=500000,
+                                         meter_types=const.METER_MAP.values()):
+    """
+    dataset_name should be 'train' or 'test'
+    """
+    small_dataset_cache_file = pathlib.Path(dataset_name + '_small_store_joined.h5')
+
+    if small_dataset_cache_file.exists():
+        small_dataset_dict = import_dict_from_cached(small_dataset_cache_file, meter_types)
+    else:
+        big_dataset_cache_file = pathlib.Path(dataset_name + '_store_joined.h5')
+        big_dataset_dict = import_dict_from_cached(big_dataset_cache_file, meter_types)
+        small_dataset_dict = {key: big_dataset.head(n) for key, big_dataset in big_dataset_dict.items()}
+        _cache_data(small_dataset_dict, small_dataset_cache_file)
+
+    return small_dataset_dict

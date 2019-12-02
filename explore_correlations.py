@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 import ashrae_constants as const
 
@@ -37,3 +38,5 @@ def plot_correlations(buildings_correlations):
     plot_correlation_values(buildings_correlations)
     plot_correlation_distribution(buildings_correlations)
     plot_correlation_distribution(buildings_correlations[['air_temperature', 'dew_temperature']])
+
+#add stuff integrating over week
