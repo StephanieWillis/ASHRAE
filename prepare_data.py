@@ -4,6 +4,7 @@ import ashrae_constants as const
 import itertools
 from IPython.display import display
 
+# importing, storing and retrieving data
 
 def import_data(ashrae_dir, filenames=const.NAMES):
     """
@@ -11,6 +12,7 @@ def import_data(ashrae_dir, filenames=const.NAMES):
 
    Return a {'thing': pd.Dataframe} dictionary.
    """
+    print('Importing data from csv')
     ashrae_dir = pathlib.Path(ashrae_dir)
     data = {name: pd.read_csv((ashrae_dir / name).with_suffix('.csv')) for name in filenames}
 
@@ -28,6 +30,13 @@ def _cache_data(data, filename):
             f[name] = df
 
 
+def import_dict_from_cached(cache_file, key_list):
+    print(f'Importing data from {cache_file}')
+    with pd.HDFStore(cache_file) as f:
+        data_dict = {key: f[key] for key in key_list}
+    return data_dict
+
+
 def get_raw_data(ashrae_dir, cache_file=None, filenames=const.NAMES):
     """
    Import ASHRAE data with optional caching mechanism.
@@ -37,11 +46,8 @@ def get_raw_data(ashrae_dir, cache_file=None, filenames=const.NAMES):
     cache_file = pathlib.Path(cache_file)
 
     if cache_file is not None and cache_file.exists():
-        print(f'Importing data from {cache_file}')
-        with pd.HDFStore(cache_file) as f:
-            data = {name: f[name] for name in filenames}
+        data = import_dict_from_cached(cache_file, filenames)
     else:
-        print('Importing data from csv')
         data = import_data(ashrae_dir)
         _cache_data(data, cache_file)
 
@@ -50,7 +56,7 @@ def get_raw_data(ashrae_dir, cache_file=None, filenames=const.NAMES):
 
     return data
 
-
+# Checking for bad data
 def print_nan_counts_all_dfs(data, names=const.NAMES):
     for name in names:
         print(f'NaNs for {name}')
@@ -82,9 +88,11 @@ def count_missing_timestamps(df):
 
     return no_of_missing_timestamps
 
+# Cleaning up data and formatting it to facilitate modelling
 
 def add_missing_weather_data(df):
-    """ Add missing timestamps to weather data and interpolate to fill in the data
+    """
+    Add missing timestamps to weather data and interpolate to fill in the data
     return df with missing times and weather data filled in
     """
 
@@ -124,11 +132,14 @@ def clean_data(raw_data, names=const.NAMES, meter_map=const.METER_MAP):
 
 
 def join_input_data_and_multi_index(data, dataset_name):
-    """Join together the meter data, weather data and building metadata into one df
+    """
+    Join together the meter data, weather data and building metadata into one df
 
     data = dict of df's (keys are'building_metadata', 'weather_train', 'weather_test', 'train','test')
     dataset_name = 'train' or 'test'
-                    """
+
+    returns a merged df which includes building_metadata, weather_train (or weather_test) and train (or test)
+    """
 
     meter_df = data[dataset_name]
     building_df = data['building_metadata']
@@ -158,13 +169,6 @@ def split_on_meter_type(joined_data, meter_types):
                         for meter_type in meter_types}
 
     return joined_data_dict
-
-
-def import_dict_from_cached(cache_file, key_list):
-    print(f'Importing data from {cache_file}')
-    with pd.HDFStore(cache_file) as f:
-        data_dict = {key: f[key] for key in key_list}
-    return data_dict
 
 
 def get_joined_data(dataset_names=['train', 'test'],

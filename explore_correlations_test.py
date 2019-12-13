@@ -15,9 +15,9 @@ elec_train = small_train_all_dict['electricity']
 elec_train_correlations = exp.produce_correlation_df(elec_train, buildings=None)
 exp.plot_correlations(elec_train_correlations)
 
-hourly_correlations = exp.loop_through_meters_apply_correlation_operation(exp.produce_correlation_df,
-                                                                          small_train_all_dict,
-                                                                          correlators=const.CORRELATORS)
+hourly_correlations = exp.loop_through_meters_apply_operation(exp.produce_correlation_df,
+                                                              small_train_all_dict,
+                                                              correlators=const.CORRELATORS)
 
 elec_weekly_means = exp.produce_weekly_average_data(elec_train)
 elec_weekly_dh = exp.produce_weekly_degree_hours(elec_train, set_point_temp=12)
