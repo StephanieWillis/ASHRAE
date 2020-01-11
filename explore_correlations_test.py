@@ -1,7 +1,3 @@
-# from sklearn.linear_model import LinearRegression
-# from sklearn.impute import SimpleImputer
-
-
 import ashrae_constants as const
 import prepare_data as prep
 import explore_correlations as exp
@@ -25,11 +21,15 @@ elec_weekly_dh = exp.produce_weekly_degree_hours(elec_train, set_point_temp=12)
 elec_weekly_means_correlations = exp.produce_correlation_df(elec_weekly_means)
 elec_weekly_dh_correlations = exp.produce_correlation_df(elec_weekly_dh, correlators=['delta_temp'])
 
-weekly_means_dict = {meter_type: exp.produce_weekly_average_data(df, weekly_attributes=const.WEEKLY_ATTRIBUTES)
-                     for meter_type, df in small_train_all_dict.items()}
+weekly_means_dict = exp.loop_through_meters_apply_operation(exp.produce_weekly_average_data,
+                                                            small_train_all_dict,
+                                                            weekly_attributes=const.WEEKLY_ATTRIBUTES)
 weekly_mean_correlations = exp.loop_through_meters_apply_operation(exp.produce_correlation_df,
                                                                    weekly_means_dict,
                                                                    correlators=const.WEEKLY_CORRELATORS)
+
+
+
 
 exp.loop_through_meters_apply_operation(exp.plot_correlation_distribution, weekly_mean_correlations)
 
