@@ -40,7 +40,7 @@ def produce_weekly_degree_hours(df, set_point_temp):
     """
     Calculates degree hours at set_point_temp and integrates over week
     """
-    df_temp = df[['meter_reading','air_temperature','week_number']].copy()
+    df_temp = df[['meter_reading', 'air_temperature', 'week_number']].copy()
     df_temp['delta_temp'] = df_temp['air_temperature'] - set_point_temp
     df_temp = df_temp.drop(columns='air_temperature')
     df_weekly_dh = df_temp.groupby(['building_id', 'week_number']).sum()
@@ -87,12 +87,13 @@ def plot_correlations(buildings_correlations):
     plot_correlation_distribution(buildings_correlations[['air_temperature', 'dew_temperature']])
 
 
-def compare_distributions(df_dict, title):
+def compare_distributions(variables_to_compare_dict, title):
     """
-    df_dict is of format {variable_name: df_column}
+    Compare the distribution of a number of variables which can be from different df's
+    variables_to_compare_dict is of format {variable_name_1: df_column_1, variable_name_2: df_column_2}
     where variable name is label and df_column is the column to plot the distribution of.
     """
-    for variable_name, df_column in df_dict.items():
+    for variable_name, df_column in variables_to_compare_dict.items():
         sns.distplot(list(df_column.dropna()), label=variable_name)
     plt.title(title)
     plt.legend()
